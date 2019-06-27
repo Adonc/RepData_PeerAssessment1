@@ -1,25 +1,192 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Reproducible Research assignment"
+author: "Adon Chawe"
+date: "June 27, 2019"
+output: html_document
+keep_md: true
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
 
-## Loading and preprocessing the data
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(gridExtra)
+```
 
+## Introduction
 
+It is now possible to collect a large amount of data about personal movement using activity monitoring devices such as a Fitbit, Nike Fuelband, or Jawbone Up. These type of devices are part of the “quantified self” movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. But these data remain under-utilized both because the raw data are hard to obtain and there is a lack of statistical methods and software for processing and interpreting the data.
 
-## What is mean total number of steps taken per day?
+This assignment makes use of data from a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
 
+The data for this assignment was obtained from:[Source](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip)
 
+The variables included in this dataset are:
 
-## What is the average daily activity pattern?
+    steps: Number of steps taking in a 5-minute interval (missing values are coded as NA\color{red}{\verb|NA|}NA)
+    date: The date on which the measurement was taken in YYYY-MM-DD format
+    interval: Identifier for the 5-minute interval in which measurement was taken
 
+The dataset is stored in a comma-separated-value (CSV) file and there are a total of 17,568 observations in this dataset.
 
+##Task 
 
-## Imputing missing values
+The task of this assignment is to generate a report in markdown formate which describes the dataset mentioned above.
 
+##Loading and Processing Data
+```{r activity}
+##Read data
+activity<-read.csv("activity.csv")
+##Transform date into Date format
+activity$date<-as.Date(activity$date,"%Y-%m-%d")
+##Mean steps
+Mean_steps<-mean(activity$steps,na.rm = TRUE)
+##Activity dataset summary
+summary(activity)
+```
 
+## Part 1
+###What is mean total number of steps taken per day? `r round(mean(activity$steps,na.rm=T),0)` steps on average per day
 
-## Are there differences in activity patterns between weekdays and weekends?
+Compute total number of steps taken per day, showing only the first 20
+
+```{r total daily steps}
+##Daily Total steps
+Daily<-activity%>%group_by(day(date),month(date),year(date))%>%summarise(Sum=sum(na.omit(steps)),Mean=mean(steps,na.rm = T),Median=median(steps,na.rm = T))
+##Clean the Names 
+Names<-c("Day","Month","Year","Sum","Mean","Median")
+names(Daily)<-make.names(Names)
+##Change months number to names
+Daily$Month<-month.abb[Daily$Month]
+print.data.frame(head(Daily,20))
+```
+
+The above table shows that the data come from two months, thats October and November, it also shows each day's total from those months a well as the mean and median.
+
+##Plot total steps
+```{r}
+hist(Daily$Sum,xlab = "Daily Total steps" ,main="Daily steps taken distribution")
+```
+
+##Plot for each month
+```{r}
+##Separate by Month
+Oct<-filter(Daily,Month=="Oct")
+Nov<-filter(Daily,Month=="Nov")
+par(2:1)
+hist(Oct$Sum,xlab = "Daily Total steps" ,main="Daily steps taken distribution  - October")
+hist(Nov$Sum,xlab = "Daily Total steps" ,main="Daily steps taken distribution - November")
+```
+
+ Q3.  Calculate and report the mean and median of the total number of steps taken per day?
+
+```{r}
+mean_daily<-mean(Daily$Sum,na.rm = T)
+median_daily<-median(Daily$Sum,na.rm = T)
+mean_median<-data.frame(Mean=mean_daily,Media=median_daily)
+print.data.frame(mean_median)
+```
+Table Showing the mean and median 
+
+##What is the average daily activity pattern?
+
+Q1. Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+
+```{r}
+Interval<-activity%>%group_by(interval)%>%summarise(Average=mean(na.omit(steps)))
+##Plot
+plot(x=Interval$interval,y=Interval$Average,type = "l",xlab = "5 minute interval",ylab ="Interval average",main = "Times series plot for the steps taken in 5 min interval")
+```
+
+Q.2 Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+
+```{r}
+Interval[which.max(as.numeric(unlist(Interval$Average))),]
+```
+Therefore Interval 835 contains the maximum number of steps
+
+##Imputing missing values
+Note that there are a number of days/intervals where there are missing values (coded as NA). The presence of missing days may introduce bias into some calculations or summaries of the data.
+
+Q1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows NAs)
+
+```{r}
+##sum missing values
+colSums(is.na(activity))
+```
+
+Q2. Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc
+
+will plot the data to see the distribution of since we know its only the steps variable that has some missing values
+
+```{r}
+hist(na.omit(activity$steps),xlab = "Steps",main = "distribution of steps taken everyday")
+```
+ 
+ The data is skewed i.e a positive skew, will therefore use median to impute missing values
+ 
+```{R}
+#The data is skewed, will use median to inpute missing values
+na_index<-is.na(activity$steps)
+new_activity<-activity
+##Replace NAs
+new_activity$steps[na_index]<-median(new_activity$steps,na.rm = T)
+```
+Q3. Create a new dataset that is equal to the original dataset but with the missing data filled in.
+
+- Created in the above code chunk called new_activity
+```{r}
+summary(new_activity)
+```
+ - all the missing values have been taken care of using median
+ 
+Q4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+
+##Plot total steps - after imputing values
+```{r}
+##DailyTotal
+new_Daily<-new_activity%>%group_by(day(date),month(date),year(date))%>%summarise(Sum=sum(steps),Mean=mean(steps),Median=median(steps))
+#Change variable names
+names(new_Daily)<-make.names(Names)
+##Change months number to names
+new_Daily$Month<-month.abb[new_Daily$Month]
+##Plot total steps
+hist(new_Daily$Sum,xlab = "Daily Total steps" ,main="Daily steps taken distribution - after imputing values")
+```
+
+```{r}
+new_Oct<-filter(new_Daily,Month=="Oct")
+new_Nov<-filter(new_Daily,Month=="Nov")
+par(1:2)
+hist(new_Oct$Sum,main="Distribution after imputing NAs",xlab="steps")
+hist(new_Nov$Sum,main="Distribution after imputing NAs",xlab="steps")
+```
+
+##Are there differences in activity patterns between weekdays and weekends?
+
+For this part the weekdays() function may be of some help here. Use the dataset with the filled-in missing values for this part.
+
+Q1.Create a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day.
+
+```{r}
+##Inset into a new dataset whether a day is a weekend or weekday
+new_activity$Day<-ifelse(weekdays(new_activity$date,T)=="Sat"|weekdays(new_activity$date,T)=="Sun","Weekend","Weekday")
+##Convert Day name to factor
+new_activity$Day<-as.factor(new_activity$Day)
+str(new_activity)
+```
+
+Q2. Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). See the README file in the GitHub repository to see an example of what this plot should look like using simulated data.
+
+```{r}
+##Get averages by Day type
+Day_type_mean<-new_activity%>%group_by(Day,interval)%>%summarise(Mean=mean(steps))
+weekday<-filter(Day_type_mean,Day=="Weekday")
+weekend<-filter(Day_type_mean,Day=="Weekend")
+plot1<-ggplot(weekday,aes(interval,Mean))+geom_point(col="red")+geom_line(col="red")+ggtitle("Weekday")
+plot2<-ggplot(weekend,aes(interval,Mean))+geom_point(col="blue")+geom_line(col="blue")+ggtitle("Weekend")
+
+grid.arrange(plot1,plot2,nrow=2)
+```
